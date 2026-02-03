@@ -20,6 +20,8 @@ public:
 
     void setup();
 
+    int get_counter() const { return counter; }
+
     bool read_data(unsigned long milliseconds, double &frequency, int &counter_out);
 
     void loop_micros(unsigned long now_micros);

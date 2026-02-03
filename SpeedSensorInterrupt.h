@@ -15,6 +15,8 @@ public:
 
     bool read_data(unsigned long milliseconds, double &frequency, int &counter_out);
 
+    int get_counter() const { return counter; }
+
     void set_alpha(double a) { alpha = a; }
     double get_alpha() const { return alpha; }
 

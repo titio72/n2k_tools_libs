@@ -84,7 +84,7 @@ void SpeedSensorInterrupt::setup()
     {
         instances[n] = this;
         pinMode(pin, INPUT);
-        attachInterrupt(digitalPinToInterrupt(pin), signal_wrappers[n], CHANGE);
+        attachInterrupt(digitalPinToInterrupt(pin), signal_wrappers[n], RISING);
         Log::tracex("SPEED_SENSOR_INTERRUPT", "Setup", "Attached interrupt on pin {%d} for instance {%d}", pin, n);
     }            
     #endif

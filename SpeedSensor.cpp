@@ -34,7 +34,7 @@ bool SpeedSensor::read_data(unsigned long milliseconds, double &frequency, int& 
         else
         {   
             smooth_counter = (double)counter * alpha + smooth_counter * (1.0 - alpha);
-            frequency = smooth_counter * 1000.0 / (double)dt; // in Hz
+            frequency = smooth_counter * 1000.0 / (double)dt / 2.0; // in Hz
             
             counter = 0;
             cycles_counter = 0;
