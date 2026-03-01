@@ -62,7 +62,7 @@ bool SpeedSensorInterrupt::read_data(unsigned long milliseconds, double &frequen
     if (dt > 50 && pin >= 0) // arbitrary 50ms interval between two readings (it should be 250ms)
     {
         smooth_counter = (double)counter * alpha + smooth_counter * (1.0 - alpha);
-        frequency = (smooth_counter * 1000.0 / (double)dt); // in Hz
+        frequency = (smooth_counter * 1000.0 / (double)dt) / 2.0; // in Hz (note: we are counting both rising and falling edges, so we divide by 2)
         counter = 0;
         return true;
     }
@@ -84,7 +84,7 @@ void SpeedSensorInterrupt::setup()
     {
         instances[n] = this;
         pinMode(pin, INPUT);
-        attachInterrupt(digitalPinToInterrupt(pin), signal_wrappers[n], RISING);
+        attachInterrupt(digitalPinToInterrupt(pin), signal_wrappers[n], CHANGE);
         Log::tracex("SPEED_SENSOR_INTERRUPT", "Setup", "Attached interrupt on pin {%d} for instance {%d}", pin, n);
     }            
     #endif
