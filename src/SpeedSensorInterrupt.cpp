@@ -89,3 +89,8 @@ void SpeedSensorInterrupt::setup()
     }            
     #endif
 }
+
+void SpeedSensorInterrupt::loop_micros(unsigned long now_micros)
+{
+    // nothing to do, the counting is done in the ISR
+}

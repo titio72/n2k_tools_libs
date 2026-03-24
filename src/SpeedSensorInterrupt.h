@@ -25,6 +25,8 @@ public:
     // used for tests
     void signal();
 
+    void loop_micros(unsigned long now_micros);
+
 private:
     unsigned long last_read_time = 0;
 
