@@ -29,6 +29,7 @@ public:
 
 private:
     unsigned long last_read_time = 0;
+    unsigned long last_transition_time = 0;
 
     unsigned long counter = 0;
     double smooth_counter = 0.0;
