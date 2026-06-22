@@ -60,6 +60,30 @@ bool startswith(const char* str_to_find, const char* str)
   return false;
 }
 
+ulong _micros(void)
+{
+  #ifdef NATIVE
+  long            ms; // Milliseconds
+  time_t          s;  // Seconds
+  struct timespec spec;
+
+  clock_gettime(CLOCK_REALTIME, &spec);
+
+  s  = spec.tv_sec;
+  ms = round(spec.tv_nsec / 1.0e3); // Convert nanoseconds to microseconds
+  if (ms > 999999) {
+      s++;
+      ms = 0;
+  }
+
+  return s * 1000000 + ms;
+  #else
+  return micros();
+  #endif
+}
+
+
+
 ulong _millis(void)
 {
   #ifdef NATIVE

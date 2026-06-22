@@ -174,6 +174,7 @@ bool array_contains(T test, T *int_set, int sz)
     return false;
 }
 
+ulong _micros();
 ulong _millis();
 int msleep(long msec);
 unsigned long get_free_mem();
