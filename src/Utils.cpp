@@ -82,8 +82,6 @@ ulong _micros(void)
   #endif
 }
 
-
-
 ulong _millis(void)
 {
   #ifdef NATIVE

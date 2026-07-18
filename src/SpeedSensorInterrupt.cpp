@@ -39,7 +39,7 @@ static SignalWrapperType signal_wrappers[] = {signal_wrapper_0, signal_wrapper_1
 
 static int instance_count = 0;
 
-SpeedSensorInterrupt::SpeedSensorInterrupt(int p, int n) : pin(p), n(n), counter(0)
+SpeedSensorInterrupt::SpeedSensorInterrupt(int p, int n) : pin(p), n(n), counter(0), last_transition_time(0)
 {
     if (n < 0)
     {
@@ -74,7 +74,12 @@ bool SpeedSensorInterrupt::read_data(unsigned long milliseconds, double &frequen
 
 void SpeedSensorInterrupt::signal()
 {
-    counter++;
+    // debounce time of 10ms to avoid counting multiple transitions due to bouncing, this is a simple software debounce that should work for most applications, if the signal frequency is very high and the bouncing is very bad, a hardware debounce (e.g. RC filter) may be needed
+    if (micros() - last_transition_time > 10000) // debounce time of 10ms
+    {
+        counter++;
+        last_transition_time = micros();
+    }
 }
 
 void SpeedSensorInterrupt::setup()
@@ -88,4 +93,9 @@ void SpeedSensorInterrupt::setup()
         Log::tracex("SPEED_SENSOR_INTERRUPT", "Setup", "Attached interrupt on pin {%d} for instance {%d}", pin, n);
     }            
     #endif
+}
+
+void SpeedSensorInterrupt::loop_micros(unsigned long now_micros)
+{
+    // nothing to do, the counting is done in the ISR
 }
