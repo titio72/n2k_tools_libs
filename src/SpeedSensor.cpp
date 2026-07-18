@@ -64,7 +64,7 @@ void SpeedSensor::read_signal(int new_state, unsigned long t_micros)
     cycles_counter++;
     if (new_state != state)
     {
-        if (t_micros - last_transition_time >= 2000)
+        if (t_micros - last_transition_time >= 100)
         {
             counter++;
             state = new_state;

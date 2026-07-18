@@ -7,223 +7,181 @@
 
 #ifndef NATIVE
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLE2902.h>
-#include <BLECharacteristic.h>
-#include <BLEUUID.h>
+#include <NimBLEDevice.h>
 
 class InternalBLEStateImpl
     : public InternalBLEState,
-      public BLECharacteristicCallbacks,
-      public BLEServerCallbacks
+      public NimBLECharacteristicCallbacks,
+      public NimBLEServerCallbacks
 {
 private:
-    BLEServer *pServer = nullptr;
-    BLEService *pService = nullptr;
-    std::vector<BLECharacteristic *> characteristicsSettings;
-    std::vector<BLECharacteristic *> characteristicsFields;
+    NimBLEServer *pServer = nullptr;
+    NimBLEService *pService = nullptr;
+    std::vector<NimBLECharacteristic *> characteristicsSettings;
+    std::vector<NimBLECharacteristic *> characteristicsFields;
     ABBLEWriteCallback *clientWriteCallback = nullptr;
-
     std::string name = "";
     std::string uuid = "";
 
 public:
-    InternalBLEStateImpl()
+    InternalBLEStateImpl() {}
+    ~InternalBLEStateImpl() {}
+
+    void init(const char *n, const char *u, ABBLEWriteCallback *c)
     {
+        name = n;
+        uuid = u;
+        clientWriteCallback = c;
     }
 
-    ~InternalBLEStateImpl()
+    // NimBLECharacteristicCallbacks
+    void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo)
     {
-    }
-
-    
-    void init(const char* name, const char* uuid, ABBLEWriteCallback* c)
-    {
-        this->name = name;
-        this->uuid = uuid;
-        this->clientWriteCallback = c;
-    }
-
-    // implements the BLECharacteristicCallbacks interface
-    void onWrite(BLECharacteristic *pCharacteristic, esp_ble_gatts_cb_param_t *param)
-    {
-        if (clientWriteCallback == nullptr)
-            return;
+        if (clientWriteCallback == nullptr) return;
 
         static char v[256];
-        // bounded copy of incoming value to local buffer
         strncpy(v, pCharacteristic->getValue().c_str(), sizeof(v) - 1);
         v[sizeof(v) - 1] = '\0';
-        //Log::tracex("BLE", "Characteristic write", "UUID {%s} value {%s}", pCharacteristic->getUUID().toString().c_str(), v);
 
         int i = 0;
-        for (i = 0; i < characteristicsSettings.size(); i++)
+        for (i = 0; i < (int)characteristicsSettings.size(); i++)
         {
-            BLEUUID uuid(characteristicsSettings[i]->getUUID());
-            if (uuid.equals(pCharacteristic->getUUID()))
+            if (characteristicsSettings[i]->getUUID() == pCharacteristic->getUUID())
                 break;
         }
-        if (i < characteristicsSettings.size())
-        {
+        if (i < (int)characteristicsSettings.size())
             clientWriteCallback->on_write(i, v);
-        }
     }
 
-    // implements the BLEServerCallbacks interface
-    void onConnect(BLEServer *pServer)
+    // NimBLEServerCallbacks
+    void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
     {
         Log::trace("[BLE] Connected to client\n");
-        Log::trace("[BLE] Readvertising\n");
-        pServer->getAdvertising()->start();
+        // Request 500 ms CI (400 x 1.25 ms), slave latency 4, supervision 5 s
+        pServer->updateConnParams(connInfo.getConnHandle(), 400, 400, 4, 500);
+        NimBLEDevice::getAdvertising()->start();
     }
 
-    void onDisconnect(BLEServer *pServer)
+    void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason)
     {
-        Log::trace("[BLE] Disconneted from client\n");
+        Log::trace("[BLE] Disconnected from client\n");
     }
-    // end of BLEServerCallbacks interface
 
     void setup(const std::vector<ABBLEField> &fields, const std::vector<ABBLESetting> &settings)
     {
         Log::tracex("BLE", "Setup", "device {%s}", name.c_str());
-        BLEDevice::init(name);
-        BLEDevice::setMTU(128);
-        pServer = BLEDevice::createServer();
+        NimBLEDevice::init(name);
+        NimBLEDevice::setMTU(128);
+        NimBLEDevice::setPower(ESP_PWR_LVL_N0); // 0 dBm, sufficient for cabin range
+        pServer = NimBLEDevice::createServer();
         pServer->setCallbacks(this);
         pService = pServer->createService(uuid.c_str());
-        Log::tracex("BLE", "Loading characteristics");
-        for (int i = 0; i < settings.size(); i++)
+        for (int i = 0; i < (int)settings.size(); i++)
         {
             const ABBLESetting &s = settings.at(i);
-            BLECharacteristic *c;
-            createSettingCharacteristics(pService, s.c_uuid.c_str(), &c, this);
+            NimBLECharacteristic *c = pService->createCharacteristic(
+                s.c_uuid.c_str(), NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+            c->setCallbacks(this);
             characteristicsSettings.push_back(c);
+            Log::tracex("BLE", "Setting", "UUID {%s}", s.c_uuid.c_str());
         }
-        for (int i = 0; i < fields.size(); i++)
+        for (int i = 0; i < (int)fields.size(); i++)
         {
             const ABBLEField &s = fields.at(i);
-            BLECharacteristic *c;
-            createFieldCharacteristic(pService, s.c_uuid.c_str(), &c);
+            // NimBLE adds the CCCD descriptor for INDICATE automatically
+            NimBLECharacteristic *c = pService->createCharacteristic(
+                s.c_uuid.c_str(), NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::INDICATE);
             characteristicsFields.push_back(c);
+            Log::tracex("BLE", "Field", "UUID {%s}", s.c_uuid.c_str());
         }
         Log::tracex("BLE", "Loaded", "Settings {%d} Fields {%d}", settings.size(), fields.size());
     }
 
     void end()
     {
-        BLEDevice::deinit();
+        NimBLEDevice::deinit(false); // false = keep bonding data in NVS
     }
 
     void begin()
     {
         Log::tracex("BLE", "Starting BLE", "device {%s}", name.c_str());
         pService->start();
-        BLESecurity *pSecurity = new BLESecurity();
-        pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
-        pSecurity->setCapability(ESP_IO_CAP_NONE);
-        pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
-        pServer->getAdvertising()->addServiceUUID(uuid.c_str());
-        pServer->getAdvertising()->start();
+
+        // Just Works bonding with Secure Connections, no MITM
+        NimBLEDevice::setSecurityAuth(true, false, true);
+        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+
+        // 1000 ms advertising interval (1600 x 0.625 ms) vs ~100 ms default
+        NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
+        pAdv->setMinInterval(1600);
+        pAdv->setMaxInterval(1600);
+        pAdv->addServiceUUID(uuid.c_str());
+        pAdv->start();
     }
 
     void set_field_value(int handle, const char *value)
     {
-        if (handle >= 0 && handle < characteristicsFields.size())
+        if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
-            BLECharacteristic *c = characteristicsFields[handle];
-            c->setValue(value);
-            c->indicate();
+            characteristicsFields[handle]->setValue(value);
+            characteristicsFields[handle]->indicate();
         }
     }
 
     void set_field_value(int handle, uint16_t value)
     {
-        if (handle >= 0 && handle < characteristicsFields.size())
+        if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
-            BLECharacteristic *c = characteristicsFields[handle];
-            c->setValue(value);
-            c->indicate();
+            characteristicsFields[handle]->setValue(value);
+            characteristicsFields[handle]->indicate();
         }
     }
 
     void set_field_value(int handle, void *value, int len)
     {
-        if (handle >= 0 && handle < characteristicsFields.size())
+        if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
-            BLECharacteristic *c = characteristicsFields[handle];
-            c->setValue((uint8_t *)value, len);
-            c->indicate();
+            characteristicsFields[handle]->setValue((uint8_t *)value, len);
+            characteristicsFields[handle]->indicate();
         }
     }
 
     ByteBuffer get_field_value(int handle)
     {
-        if (handle >= 0 && handle < characteristicsFields.size())
+        if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
-            BLECharacteristic *c = characteristicsFields[handle];
-            return ByteBuffer(c->getData(), c->getLength());
+            auto val = characteristicsFields[handle]->getValue();
+            return ByteBuffer((uint8_t *)val.data(), val.size());
         }
         return ByteBuffer(0);
     }
 
     void set_setting_value(int handle, const char *value)
     {
-        if (handle >= 0 && handle < characteristicsSettings.size())
-        {
-            BLECharacteristic *c = characteristicsSettings[handle];
-            c->setValue(value);
-        }
+        if (handle >= 0 && handle < (int)characteristicsSettings.size())
+            characteristicsSettings[handle]->setValue(value);
     }
 
     void set_setting_value(int handle, int value)
     {
-        if (handle >= 0 && handle < characteristicsSettings.size())
+        if (handle >= 0 && handle < (int)characteristicsSettings.size())
         {
             static char temp[16];
             itoa(value, temp, 10);
-            BLECharacteristic *c = characteristicsSettings[handle];
-            c->setValue(temp);
+            characteristicsSettings[handle]->setValue(temp);
         }
-    }
-
-    void createSettingCharacteristics(BLEService *pService, const char *uuid, BLECharacteristic **c, BLECharacteristicCallbacks *cback)
-    {
-        Log::tracex("BLE", "Creating bool characteristic", "UUID {%s} service {%s}", uuid, pService->getUUID().toString().c_str());
-        *c = pService->createCharacteristic(uuid,
-                                            BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ);
-        (*c)->setReadProperty(true);
-        (*c)->setWriteProperty(true);
-        (*c)->setCallbacks(cback);
-    }
-
-    void createFieldCharacteristic(BLEService *pService, const char *uuid, BLECharacteristic **c)
-    {
-        Log::tracex("BLE", "Creating numeric characteristic", "UUID {%s} service {%s}", uuid, pService->getUUID().toString().c_str());
-        *c = pService->createCharacteristic(uuid, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_INDICATE);
-        (*c)->setIndicateProperty(true);
-        (*c)->setReadProperty(true);
-        (*c)->addDescriptor(new BLE2902());
     }
 
     void change_device_name(const char *n)
     {
-        // trim to max 15 chars
         name = std::string(n).substr(0, 15);
         if (pServer)
         {
-            pServer->getAdvertising()->stop();
-            esp_err_t errRc = ::esp_ble_gap_set_device_name(name.c_str());
-            if (errRc != ESP_OK)
-            {
-                Log::tracex("BLE", "Change device name", "error {%d} name {%s}", errRc, name);
-            }
-            else
-            {
-                Log::tracex("BLE", "Change device name", "name {%s}", name);
-            }
-            pServer->getAdvertising()->start();
+            NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
+            pAdv->stop();
+            NimBLEDevice::setDeviceName(name);
+            pAdv->start();
+            Log::tracex("BLE", "Change device name", "name {%s}", name.c_str());
         }
     }
 
@@ -235,16 +193,16 @@ public:
 #define USE_REAL_BLE_IMPLEMENTATION
 #endif
 
-BTInterface::BTInterface(const char *uuid, const char *name, ABBLEWriteCallback* cmd_cback, InternalBLEState *internalState) : init(false)
+BTInterface::BTInterface(const char *uuid, const char *name, ABBLEWriteCallback *cmd_cback, InternalBLEState *internalState) : init(false)
 {
     internalStateOwned = false;
-    #ifdef USE_REAL_BLE_IMPLEMENTATION
+#ifdef USE_REAL_BLE_IMPLEMENTATION
     if (internalState == nullptr)
     {
         internalStateOwned = true;
         internalState = new InternalBLEStateImpl();
     }
-    #endif
+#endif
     state = internalState;
     if (state)
     {
@@ -257,10 +215,10 @@ BTInterface::~BTInterface()
     if (state)
     {
         state->end();
-        #ifdef USE_REAL_BLE_IMPLEMENTATION
+#ifdef USE_REAL_BLE_IMPLEMENTATION
         if (internalStateOwned)
             delete state;
-        #endif
+#endif
         state = nullptr;
     }
 }
