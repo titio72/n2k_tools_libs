@@ -75,10 +75,10 @@ bool SpeedSensorInterrupt::read_data(unsigned long milliseconds, double &frequen
 void SpeedSensorInterrupt::signal()
 {
     // debounce time of 10ms to avoid counting multiple transitions due to bouncing, this is a simple software debounce that should work for most applications, if the signal frequency is very high and the bouncing is very bad, a hardware debounce (e.g. RC filter) may be needed
-    if (micros() - last_transition_time > 10000) // debounce time of 10ms
+    if (_micros() - last_transition_time > 10000) // debounce time of 10ms
     {
         counter++;
-        last_transition_time = micros();
+        last_transition_time = _micros();
     }
 }
 
