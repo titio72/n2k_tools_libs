@@ -116,6 +116,9 @@ public:
         pAdv->setMinInterval(1600);
         pAdv->setMaxInterval(1600);
         pAdv->addServiceUUID(uuid.c_str());
+        // The 128-bit service UUID already fills most of the 31-byte legacy adv
+        // packet, leaving no room for the name there - put it in the scan response instead.
+        pAdv->enableScanResponse(true);
         pAdv->setName(name);
         pAdv->start();
     }
