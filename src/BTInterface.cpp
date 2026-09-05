@@ -116,6 +116,7 @@ public:
         pAdv->setMinInterval(1600);
         pAdv->setMaxInterval(1600);
         pAdv->addServiceUUID(uuid.c_str());
+        pAdv->setName(name);
         pAdv->start();
     }
 
@@ -180,6 +181,7 @@ public:
             NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
             pAdv->stop();
             NimBLEDevice::setDeviceName(name);
+            pAdv->setName(name);
             pAdv->start();
             Log::tracex("BLE", "Change device name", "name {%s}", name.c_str());
         }
