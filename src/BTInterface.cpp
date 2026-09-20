@@ -22,6 +22,7 @@ private:
     ABBLEWriteCallback *clientWriteCallback = nullptr;
     std::string name = "";
     std::string uuid = "";
+    uint32_t passkey = 0;
 
 public:
     InternalBLEStateImpl() {}
@@ -32,6 +33,11 @@ public:
         name = n;
         uuid = u;
         clientWriteCallback = c;
+    }
+
+    void set_passkey(uint32_t pk) override
+    {
+        passkey = pk;
     }
 
     // NimBLECharacteristicCallbacks
@@ -79,8 +85,11 @@ public:
         for (int i = 0; i < (int)settings.size(); i++)
         {
             const ABBLESetting &s = settings.at(i);
-            NimBLECharacteristic *c = pService->createCharacteristic(
-                s.c_uuid.c_str(), NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+            // With a passkey, writes need an encrypted + authenticated (MITM) link
+            uint32_t props = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE;
+            if (passkey != 0)
+                props |= NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN;
+            NimBLECharacteristic *c = pService->createCharacteristic(s.c_uuid.c_str(), props);
             c->setCallbacks(this);
             characteristicsSettings.push_back(c);
             Log::tracex("BLE", "Setting", "UUID {%s}", s.c_uuid.c_str());
@@ -107,9 +116,19 @@ public:
         Log::tracex("BLE", "Starting BLE", "device {%s}", name.c_str());
         pService->start();
 
-        // Just Works bonding with Secure Connections, no MITM
-        NimBLEDevice::setSecurityAuth(true, false, true);
-        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+        if (passkey != 0)
+        {
+            // Bonding + MITM + Secure Connections, static passkey entered on the peer
+            NimBLEDevice::setSecurityAuth(true, true, true);
+            NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
+            NimBLEDevice::setSecurityPasskey(passkey);
+        }
+        else
+        {
+            // Just Works bonding with Secure Connections, no MITM
+            NimBLEDevice::setSecurityAuth(true, false, true);
+            NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+        }
 
         // 1000 ms advertising interval (1600 x 0.625 ms) vs ~100 ms default
         NimBLEAdvertising *pAdv = NimBLEDevice::getAdvertising();
@@ -303,6 +322,12 @@ void BTInterface::set_device_name(const char *name)
 {
     if (state)
         state->change_device_name(name);
+}
+
+void BTInterface::set_passkey(uint32_t passkey)
+{
+    if (state)
+        state->set_passkey(passkey);
 }
 
 const char *BTInterface::get_device_name()

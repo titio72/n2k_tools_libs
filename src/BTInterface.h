@@ -45,6 +45,12 @@ public:
     virtual ByteBuffer get_field_value(int handle) = 0;
     virtual void set_setting_value(int handle, const char *value) = 0;
     virtual void set_setting_value(int handle, int value) = 0;
+
+    /**
+     * Set the 6-digit passkey (100000..999999) required to write settings.
+     * Must be called before setup(). 0 disables security (open access).
+     */
+    virtual void set_passkey(uint32_t passkey) { (void)passkey; }
  };
 
 class BTInterface {
@@ -67,6 +73,12 @@ class BTInterface {
 
         void set_device_name(const char* name);
         const char* get_device_name();
+
+        /**
+         * Require pairing with this 6-digit passkey to write settings
+         * (reads stay open). Must be called before setup(). 0 = no security.
+         */
+        void set_passkey(uint32_t passkey);
 
     private:
         bool internalStateOwned;
