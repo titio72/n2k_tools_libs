@@ -15,10 +15,11 @@ public:
 
 class ABBLESetting {
 public:
-    ABBLESetting(const char* n, const char* id): name(n), c_uuid(id) {}
+    ABBLESetting(const char* n, const char* id, bool secured = true): name(n), c_uuid(id), secured(secured) {}
 
     std::string name;
     std::string c_uuid;
+    bool secured; // when a passkey is set, writes require a paired (authenticated) link
 };
 
 class ABBLEField {
@@ -61,7 +62,10 @@ class BTInterface {
         void begin();
         void loop(unsigned long ms);
 
-        int add_setting(const char* name, const char* uuid);
+        /**
+         * secured = false makes the setting writable without pairing even when a passkey is set
+         */
+        int add_setting(const char* name, const char* uuid, bool secured = true);
         int add_field(const char* name, const char* uuid);
 
         void set_setting_value(int handle, const char* value);

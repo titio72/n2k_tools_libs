@@ -87,7 +87,7 @@ public:
             const ABBLESetting &s = settings.at(i);
             // With a passkey, writes need an encrypted + authenticated (MITM) link
             uint32_t props = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE;
-            if (passkey != 0)
+            if (passkey != 0 && s.secured)
                 props |= NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN;
             NimBLECharacteristic *c = pService->createCharacteristic(s.c_uuid.c_str(), props);
             c->setCallbacks(this);
@@ -247,9 +247,9 @@ BTInterface::~BTInterface()
     }
 }
 
-int BTInterface::add_setting(const char *name, const char *uuid)
+int BTInterface::add_setting(const char *name, const char *uuid, bool secured)
 {
-    ABBLESetting s(name, uuid);
+    ABBLESetting s(name, uuid, secured);
     settings.push_back(s);
     return settings.size() - 1;
 }
