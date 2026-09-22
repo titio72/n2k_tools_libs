@@ -52,6 +52,13 @@ public:
      * Must be called before setup(). 0 disables security (open access).
      */
     virtual void set_passkey(uint32_t passkey) { (void)passkey; }
+
+    /**
+     * Change the passkey required for future pairings, without a reboot. Safe to call any time
+     * after begin(). Already-bonded peers are unaffected (the passkey only matters during the
+     * initial pairing exchange). No-op if security was never enabled (passkey was 0 at begin()).
+     */
+    virtual void change_passkey(uint32_t passkey) { (void)passkey; }
  };
 
 class BTInterface {
@@ -83,6 +90,12 @@ class BTInterface {
          * (reads stay open). Must be called before setup(). 0 = no security.
          */
         void set_passkey(uint32_t passkey);
+
+        /**
+         * Change the passkey required for future pairings, without a reboot. Only meaningful
+         * once security has already been enabled via set_passkey()+setup()+begin().
+         */
+        void change_passkey(uint32_t passkey);
 
     private:
         bool internalStateOwned;

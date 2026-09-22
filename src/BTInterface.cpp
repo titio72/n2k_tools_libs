@@ -40,6 +40,13 @@ public:
         passkey = pk;
     }
 
+    void change_passkey(uint32_t pk) override
+    {
+        passkey = pk;
+        if (passkey != 0)
+            NimBLEDevice::setSecurityPasskey(passkey);
+    }
+
     // NimBLECharacteristicCallbacks
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo)
     {
@@ -328,6 +335,12 @@ void BTInterface::set_passkey(uint32_t passkey)
 {
     if (state)
         state->set_passkey(passkey);
+}
+
+void BTInterface::change_passkey(uint32_t passkey)
+{
+    if (state)
+        state->change_passkey(passkey);
 }
 
 const char *BTInterface::get_device_name()
