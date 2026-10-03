@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <stdint.h>
+#include <stddef.h>
 #include <Utils.h>
 
 struct Configuration;
@@ -11,7 +12,23 @@ struct Configuration;
 class ABBLEWriteCallback {
 public:
     virtual void on_write(int handle, const char* value) = 0;
+
+    /**
+     * Raw bytes of a write. Override to receive binary payloads (which may contain 0x00).
+     * The default hands the bytes to on_write() as a NUL-terminated string (cut at the first 0x00
+     * and at 255 bytes), which is the historic behaviour.
+     */
+    virtual void on_write_bytes(int handle, const uint8_t* data, size_t len);
 };
+
+inline void ABBLEWriteCallback::on_write_bytes(int handle, const uint8_t* data, size_t len)
+{
+    char value[256];
+    size_t n = len < sizeof(value) - 1 ? len : sizeof(value) - 1;
+    if (n) memcpy(value, data, n);
+    value[n] = '\0';
+    on_write(handle, value);
+}
 
 class ABBLESetting {
 public:

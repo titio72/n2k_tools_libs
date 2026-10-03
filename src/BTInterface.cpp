@@ -52,9 +52,7 @@ public:
     {
         if (clientWriteCallback == nullptr) return;
 
-        static char v[256];
-        strncpy(v, pCharacteristic->getValue().c_str(), sizeof(v) - 1);
-        v[sizeof(v) - 1] = '\0';
+        auto val = pCharacteristic->getValue();
 
         int i = 0;
         for (i = 0; i < (int)characteristicsSettings.size(); i++)
@@ -63,7 +61,7 @@ public:
                 break;
         }
         if (i < (int)characteristicsSettings.size())
-            clientWriteCallback->on_write(i, v);
+            clientWriteCallback->on_write_bytes(i, (const uint8_t *)val.data(), val.size());
     }
 
     // NimBLEServerCallbacks
