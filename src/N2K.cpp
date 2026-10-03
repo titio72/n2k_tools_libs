@@ -29,6 +29,7 @@
 #include "Utils.h"
 #include "Log.h"
 #include <NMEA2000.h>
+#include <N2kDeviceList.h>
 
 #define N2K_LOG_TAG "N2k"
 
@@ -119,6 +120,40 @@ void N2K::add_pgn(unsigned long pgn)
     pgns.push_back(pgn);
 }
 
+void N2K::set_listen_all(bool b)
+{
+    listen_all = b;
+}
+
+void N2K::add_rx_pgn(unsigned long pgn)
+{
+    rx_pgns.push_back(pgn);
+}
+
+void N2K::enable_device_list()
+{
+    want_device_list = true;
+}
+
+bool N2K::find_device(n2k_device_matcher matcher, unsigned char &source)
+{
+    if (!device_list || !matcher)
+        return false;
+    for (unsigned char src = 0; src < N2kMaxBusDevices; ++src)
+    {
+        const tNMEA2000::tDevice *d = device_list->FindDeviceBySource(src);
+        if (!d)
+            continue;
+        n2k_device_summary s{src, d->GetManufacturerCode(), d->GetModelID(), d->GetModelVersion()};
+        if (matcher(s))
+        {
+            source = src;
+            return true;
+        }
+    }
+    return false;
+}
+
 #ifndef NATIVE
 #define CREATE_NMEA \
 Log::tracex(N2K_LOG_TAG, "Initializing N2K", "RX {%d} TX {%d} source {%d}", CAN_RX_PIN, CAN_TX_PIN, desired_source); \
@@ -141,20 +176,29 @@ void N2K::setup(n2k_device_info dvc)
         CREATE_NMEA
         if (NMEA2000)
         {
-            NMEA2000->SetProductInformation(dvc.ModelSerialCode.c_str(), dvc.ProductCode, dvc.ModelID.c_str(), dvc.SwCode.c_str(), dvc.ModelVersion.c_str());
+            NMEA2000->SetProductInformation(dvc.ModelSerialCode.c_str(), dvc.ProductCode, dvc.ModelID.c_str(), dvc.SwCode.c_str(), dvc.ModelVersion.c_str(), dvc.LoadEquivalency);
             NMEA2000->SetDeviceInformation(dvc.UniqueNumber, dvc.DeviceFunction, dvc.DeviceClass, dvc.ManufacturerCode);
             if (_handler)
             {
                 NMEA2000->SetMsgHandler(private_message_handler);
             }
-            NMEA2000->SetMode(tNMEA2000::N2km_NodeOnly, desired_source);
+            NMEA2000->SetMode(listen_all ? tNMEA2000::N2km_ListenAndNode : tNMEA2000::N2km_NodeOnly, desired_source);
             NMEA2000->SetN2kCANSendFrameBufSize(1000);
             NMEA2000->EnableForward(false); // Disable all msg forwarding to USB (=Serial)
             if (!pgns.empty()) {
-                // NMEA2000 expects an array terminated by 0 — create a temporary vector with a trailing 0
-                std::vector<unsigned long> ext = pgns;
-                ext.push_back(0);
-                NMEA2000->ExtendTransmitMessages(ext.data());
+                // NMEA2000 expects an array terminated by 0
+                tx_list = pgns;
+                tx_list.push_back(0);
+                NMEA2000->ExtendTransmitMessages(tx_list.data());
+            }
+            if (!rx_pgns.empty()) {
+                rx_list = rx_pgns;
+                rx_list.push_back(0);
+                NMEA2000->ExtendReceiveMessages(rx_list.data());
+            }
+            if (want_device_list)
+            {
+                device_list = new tN2kDeviceList(NMEA2000);
             }
             int retry = 0;
             do {

@@ -11,6 +11,7 @@
 #endif
 
 class tNMEA2000;
+class tN2kDeviceList;
 
 class N2KStats
 {
@@ -36,11 +37,21 @@ struct n2k_device_info
     unsigned char DeviceFunction = 145; // Device function=Analog to NMEA 2000 Gateway. See codes on http://www.nmea.org/Assets/20120726%20nmea%202000%20class%20&%20function%20codes%20v%202.00.pdf
     unsigned char DeviceClass = 60;     // Device class=Inter/Intranetwork Device. See codes on  http://www.nmea.org/Assets/20120726%20nmea%202000%20class%20&%20function%20codes%20v%202.00.pdf
     uint16_t ManufacturerCode = 2046;   // Just choosen free from code list on http://www.nmea.org/Assets/20121020%20nmea%202000%20registration%20list.pdf
+    unsigned char LoadEquivalency = 1;  // bus load, x50 mA
 };
 
 typedef void (*n2k_msg_handler)(const tN2kMsg &N2kMsg);
 typedef void (*n2k_source_change_handler)(const unsigned char old_source, const unsigned char new_source);
 typedef void (*n2k_sent_message_handler)(const tN2kMsg &N2kMsg, bool success);
+
+struct n2k_device_summary
+{
+    unsigned char source;
+    uint16_t manufacturer_code;
+    const char* model_id;       // may be NULL
+    const char* model_version;  // may be NULL
+};
+typedef bool (*n2k_device_matcher)(const n2k_device_summary &device);
 
 class N2K {
 
@@ -69,6 +80,18 @@ class N2K {
 
         void add_pgn(unsigned long pgns);
 
+        /** true: also receive messages addressed to other devices (N2km_ListenAndNode). Default false (NodeOnly). Before setup(). */
+        void set_listen_all(bool listen_all);
+
+        /** PGNs advertised as received. Before setup(). */
+        void add_rx_pgn(unsigned long pgn);
+
+        /** Track the devices on the bus (tN2kDeviceList). Before setup(). */
+        void enable_device_list();
+
+        /** First device accepted by matcher: stores its source address and returns true. False if there is no device list or no match. */
+        bool find_device(n2k_device_matcher matcher, unsigned char &source);
+
         static void set_sent_message_callback(n2k_sent_message_handler _MsgHandler);
 
     private:
@@ -78,6 +101,13 @@ class N2K {
         unsigned char desired_source;
         std::vector<unsigned long> pgns;
         n2k_device_info device_info;
+        bool listen_all = false;
+        bool want_device_list = false;
+        tN2kDeviceList* device_list = nullptr;
+        std::vector<unsigned long> rx_pgns;
+        // The NMEA2000 library keeps the pointers it is given, so these must outlive setup()
+        std::vector<unsigned long> tx_list;
+        std::vector<unsigned long> rx_list;
 
 };
 
