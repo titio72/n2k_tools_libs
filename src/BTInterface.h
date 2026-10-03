@@ -32,19 +32,24 @@ inline void ABBLEWriteCallback::on_write_bytes(int handle, const uint8_t* data, 
 
 class ABBLESetting {
 public:
-    ABBLESetting(const char* n, const char* id, bool secured = true): name(n), c_uuid(id), secured(secured) {}
+    ABBLESetting(const char* n, const char* id, bool secured = true, bool secured_read = false):
+        name(n), c_uuid(id), secured(secured), secured_read(secured_read) {}
 
     std::string name;
     std::string c_uuid;
-    bool secured; // when a passkey is set, writes require a paired (authenticated) link
+    bool secured;       // when a passkey is set, writes require a paired (authenticated) link
+    bool secured_read;  // when a passkey is set, reads require a paired (authenticated) link too
 };
 
 class ABBLEField {
 public:
-    ABBLEField(const char* n, const char* id): name(n), c_uuid(id) {}
+    ABBLEField(const char* n, const char* id, bool notify = false, bool secured_read = false):
+        name(n), c_uuid(id), notify(notify), secured_read(secured_read) {}
 
     std::string name;
     std::string c_uuid;
+    bool notify;        // notify instead of indicate
+    bool secured_read;  // when a passkey is set, reads require a paired (authenticated) link
 };
 
 class InternalBLEState
@@ -76,6 +81,16 @@ public:
      * initial pairing exchange). No-op if security was never enabled (passkey was 0 at begin()).
      */
     virtual void change_passkey(uint32_t passkey) { (void)passkey; }
+
+    /**
+     * Connection parameters requested from the central on connect (units: 1.25 ms, 1.25 ms, connection
+     * events, 10 ms). Must be called before begin(). Default (400, 400, 4, 500) favours battery life;
+     * a controller that needs responsive writes asks for a short interval and no latency.
+     */
+    virtual void set_conn_params(uint16_t min_interval, uint16_t max_interval, uint16_t latency, uint16_t timeout)
+    {
+        (void)min_interval; (void)max_interval; (void)latency; (void)timeout;
+    }
  };
 
 class BTInterface {
@@ -87,10 +102,19 @@ class BTInterface {
         void loop(unsigned long ms);
 
         /**
-         * secured = false makes the setting writable without pairing even when a passkey is set
+         * secured = false makes the setting writable without pairing even when a passkey is set.
+         * secured_read = true also requires pairing to read it (only when a passkey is set).
          */
-        int add_setting(const char* name, const char* uuid, bool secured = true);
-        int add_field(const char* name, const char* uuid);
+        int add_setting(const char* name, const char* uuid, bool secured = true, bool secured_read = false);
+
+        /**
+         * notify = true sends notifications instead of indications.
+         * secured_read = true requires pairing to read it (only when a passkey is set).
+         */
+        int add_field(const char* name, const char* uuid, bool notify = false, bool secured_read = false);
+
+        /** See InternalBLEState::set_conn_params. */
+        void set_conn_params(uint16_t min_interval, uint16_t max_interval, uint16_t latency, uint16_t timeout);
 
         void set_setting_value(int handle, const char* value);
         void set_setting_value(int handle, int value);

@@ -23,6 +23,8 @@ private:
     std::string name = "";
     std::string uuid = "";
     uint32_t passkey = 0;
+    uint16_t conn_min = 400, conn_max = 400, conn_latency = 4, conn_timeout = 500;
+    std::vector<bool> fieldNotify;
 
 public:
     InternalBLEStateImpl() {}
@@ -47,6 +49,14 @@ public:
             NimBLEDevice::setSecurityPasskey(passkey);
     }
 
+    void set_conn_params(uint16_t min_interval, uint16_t max_interval, uint16_t latency, uint16_t timeout) override
+    {
+        conn_min = min_interval;
+        conn_max = max_interval;
+        conn_latency = latency;
+        conn_timeout = timeout;
+    }
+
     // NimBLECharacteristicCallbacks
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo)
     {
@@ -68,8 +78,8 @@ public:
     void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
     {
         Log::trace("[BLE] Connected to client\n");
-        // Request 500 ms CI (400 x 1.25 ms), slave latency 4, supervision 5 s
-        pServer->updateConnParams(connInfo.getConnHandle(), 400, 400, 4, 500);
+        // Defaults: 500 ms CI (400 x 1.25 ms), slave latency 4, supervision 5 s. See set_conn_params().
+        pServer->updateConnParams(connInfo.getConnHandle(), conn_min, conn_max, conn_latency, conn_timeout);
         NimBLEDevice::getAdvertising()->start();
     }
 
@@ -94,18 +104,24 @@ public:
             uint32_t props = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE;
             if (passkey != 0 && s.secured)
                 props |= NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN;
+            if (passkey != 0 && s.secured_read)
+                props |= NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN;
             NimBLECharacteristic *c = pService->createCharacteristic(s.c_uuid.c_str(), props);
             c->setCallbacks(this);
             characteristicsSettings.push_back(c);
             Log::tracex("BLE", "Setting", "UUID {%s}", s.c_uuid.c_str());
         }
+        fieldNotify.clear();
         for (int i = 0; i < (int)fields.size(); i++)
         {
             const ABBLEField &s = fields.at(i);
-            // NimBLE adds the CCCD descriptor for INDICATE automatically
-            NimBLECharacteristic *c = pService->createCharacteristic(
-                s.c_uuid.c_str(), NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::INDICATE);
-            characteristicsFields.push_back(c);
+            // NimBLE adds the CCCD descriptor for INDICATE/NOTIFY automatically
+            uint32_t props = NIMBLE_PROPERTY::READ | (s.notify ? NIMBLE_PROPERTY::NOTIFY : NIMBLE_PROPERTY::INDICATE);
+            if (passkey != 0 && s.secured_read)
+                props |= NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN;
+            NimBLECharacteristic *cc = pService->createCharacteristic(s.c_uuid.c_str(), props);
+            characteristicsFields.push_back(cc);
+            fieldNotify.push_back(s.notify);
             Log::tracex("BLE", "Field", "UUID {%s}", s.c_uuid.c_str());
         }
         Log::tracex("BLE", "Loaded", "Settings {%d} Fields {%d}", settings.size(), fields.size());
@@ -147,12 +163,20 @@ public:
         pAdv->start();
     }
 
+    void publish(int handle)
+    {
+        if (fieldNotify[handle])
+            characteristicsFields[handle]->notify();
+        else
+            characteristicsFields[handle]->indicate();
+    }
+
     void set_field_value(int handle, const char *value)
     {
         if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
             characteristicsFields[handle]->setValue(value);
-            characteristicsFields[handle]->indicate();
+            publish(handle);
         }
     }
 
@@ -161,7 +185,7 @@ public:
         if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
             characteristicsFields[handle]->setValue(value);
-            characteristicsFields[handle]->indicate();
+            publish(handle);
         }
     }
 
@@ -170,7 +194,7 @@ public:
         if (handle >= 0 && handle < (int)characteristicsFields.size())
         {
             characteristicsFields[handle]->setValue((uint8_t *)value, len);
-            characteristicsFields[handle]->indicate();
+            publish(handle);
         }
     }
 
@@ -252,16 +276,16 @@ BTInterface::~BTInterface()
     }
 }
 
-int BTInterface::add_setting(const char *name, const char *uuid, bool secured)
+int BTInterface::add_setting(const char *name, const char *uuid, bool secured, bool secured_read)
 {
-    ABBLESetting s(name, uuid, secured);
+    ABBLESetting s(name, uuid, secured, secured_read);
     settings.push_back(s);
     return settings.size() - 1;
 }
 
-int BTInterface::add_field(const char *name, const char *uuid)
+int BTInterface::add_field(const char *name, const char *uuid, bool notify, bool secured_read)
 {
-    ABBLEField f(name, uuid);
+    ABBLEField f(name, uuid, notify, secured_read);
     fields.push_back(f);
     return fields.size() - 1;
 }
@@ -339,6 +363,12 @@ void BTInterface::change_passkey(uint32_t passkey)
 {
     if (state)
         state->change_passkey(passkey);
+}
+
+void BTInterface::set_conn_params(uint16_t min_interval, uint16_t max_interval, uint16_t latency, uint16_t timeout)
+{
+    if (state)
+        state->set_conn_params(min_interval, max_interval, latency, timeout);
 }
 
 const char *BTInterface::get_device_name()
