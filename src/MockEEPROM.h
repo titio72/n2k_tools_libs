@@ -37,12 +37,15 @@ public:
             eeprom_size = size;
             if (data_buffer == nullptr)
             {
+                // First allocation only: a fresh EEPROM reads all 0xFF.
+                // Later begin() calls keep the contents, like the real flash.
                 data_buffer = new uint8_t[MAX_SIZE];
                 if (data_buffer == nullptr)
                     return false;
+                memset(data_buffer, 0xFF, MAX_SIZE);
+                write_count = 0;
+                commit_count = 0;
             }
-
-            reset();
             initialized = true;
         }
         return true;
@@ -334,6 +337,7 @@ public:
             return t;
 
         memcpy(data_buffer + address, (const uint8_t *)&t, sizeof(T));
+        write_count++;
         return t;
     }
 
@@ -463,17 +467,12 @@ public:
     }
 
     /**
-     * Cleanup (call at end of tests)
+     * Release the EEPROM like the real end(): the contents are kept and
+     * the next begin() sees them. Use reset() to wipe them in tests.
      */
     void end()
     {
-        if (data_buffer != nullptr)
-        {
-            delete[] data_buffer;
-            data_buffer = nullptr;
-        }
         initialized = false;
-        eeprom_size = 0;
     }
 
 private:
