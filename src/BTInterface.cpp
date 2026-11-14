@@ -198,6 +198,12 @@ public:
         }
     }
 
+    void store_field_value(int handle, void *value, int len) override
+    {
+        if (handle >= 0 && handle < (int)characteristicsFields.size())
+            characteristicsFields[handle]->setValue((uint8_t *)value, len);
+    }
+
     ByteBuffer get_field_value(int handle)
     {
         if (handle >= 0 && handle < (int)characteristicsFields.size())
@@ -318,6 +324,12 @@ void BTInterface::set_setting_value(int handle, int value)
 {
     if (state)
         state->set_setting_value(handle, value);
+}
+
+void BTInterface::store_field_value(int handle, void *value, int len)
+{
+    if (state)
+        state->store_field_value(handle, value, len);
 }
 
 ByteBuffer BTInterface::get_field_value(int handle)

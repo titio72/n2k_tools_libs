@@ -65,6 +65,13 @@ public:
     virtual void set_field_value(int handle, const char *value) = 0;
     virtual void set_field_value(int handle, uint16_t value) = 0;
     virtual void set_field_value(int handle, void *value, int len) = 0;
+
+    /**
+     * Stores the value of a field that clients read when they want it: unlike set_field_value() it
+     * pushes nothing to subscribers. A state that can push overrides this to store only; the default
+     * is set_field_value().
+     */
+    virtual void store_field_value(int handle, void *value, int len) { set_field_value(handle, value, len); }
     virtual ByteBuffer get_field_value(int handle) = 0;
     virtual void set_setting_value(int handle, const char *value) = 0;
     virtual void set_setting_value(int handle, int value) = 0;
@@ -121,6 +128,12 @@ class BTInterface {
         void set_field_value(int handle, uint16_t value);
         void set_field_value(int handle, const char* value);
         void set_field_value(int handle, void* value, int len);
+
+        /**
+         * Sets the value of a field that clients read on demand, without notifying or indicating
+         * it: the stream of a field that is pushed (indicate) is not disturbed by it.
+         */
+        void store_field_value(int handle, void* value, int len);
         ByteBuffer get_field_value(int handle);
 
         void set_device_name(const char* name);

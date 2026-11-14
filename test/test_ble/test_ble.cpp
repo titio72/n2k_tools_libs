@@ -29,13 +29,19 @@ struct MockState : InternalBLEState {
   void end() override {}
   void set_field_value(int, const char*) override {}
   void set_field_value(int, uint16_t) override {}
-  void set_field_value(int, void*, int) override {}
+  int pushes = 0;
+  void set_field_value(int, void*, int) override { pushes++; }
   ByteBuffer get_field_value(int) override { return ByteBuffer(0); }
   void set_setting_value(int, const char*) override {}
   void set_setting_value(int, int) override {}
   void set_passkey(uint32_t p) override { passkey = p; }
   void change_passkey(uint32_t p) override { changed = p; }
   void set_conn_params(uint16_t a, uint16_t b, uint16_t c, uint16_t d) override { cmin = a; cmax = b; clat = c; cto = d; }
+};
+
+struct QuietState : MockState {
+  int stored = 0;
+  void store_field_value(int, void*, int) override { stored++; }
 };
 
 void setUp() {}
@@ -119,6 +125,31 @@ void test_set_conn_params_without_state_is_harmless() {
   TEST_PASS();
 }
 
+void test_store_field_value_reaches_the_state_without_pushing() {
+  Recorder cb; QuietState st;
+  BTInterface ble("uuid", "name", &cb, &st);
+  uint8_t v[] = {1, 2, 3};
+  ble.store_field_value(0, v, sizeof v);
+  TEST_ASSERT_EQUAL(1, st.stored);
+  TEST_ASSERT_EQUAL(0, st.pushes);
+}
+
+void test_store_field_value_falls_back_to_set_for_states_that_cannot_store_quietly() {
+  Recorder cb; MockState st;
+  BTInterface ble("uuid", "name", &cb, &st);
+  uint8_t v[] = {1, 2, 3};
+  ble.store_field_value(0, v, sizeof v);
+  TEST_ASSERT_EQUAL(1, st.pushes);
+}
+
+void test_store_field_value_without_state_is_harmless() {
+  Recorder cb;
+  BTInterface ble("uuid", "name", &cb, nullptr);
+  uint8_t v[] = {1};
+  ble.store_field_value(0, v, sizeof v);
+  TEST_PASS();
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_default_on_write_bytes_falls_back_to_string_and_stops_at_nul);
@@ -129,5 +160,8 @@ int main() {
   RUN_TEST(test_notify_and_secured_read_flags_reach_the_state);
   RUN_TEST(test_conn_params_and_passkey_are_forwarded);
   RUN_TEST(test_set_conn_params_without_state_is_harmless);
+  RUN_TEST(test_store_field_value_reaches_the_state_without_pushing);
+  RUN_TEST(test_store_field_value_falls_back_to_set_for_states_that_cannot_store_quietly);
+  RUN_TEST(test_store_field_value_without_state_is_harmless);
   return UNITY_END();
 }
