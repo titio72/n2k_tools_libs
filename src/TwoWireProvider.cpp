@@ -19,7 +19,7 @@ TwoWire* TwoWireProvider::get_two_wire()
     {
         Log::tracex("I2C", "Initializing TwoWires", "SDA {%d} SCL {%d}", SDA_PIN, SCL_PIN);
         ic2 = &Wire;
-        active = ic2->begin(SDA_PIN, SCL_PIN);
+        active = ic2->begin(SDA_PIN, SCL_PIN, TwoWireProvider::clock);
         Log::tracex("I2C", "TwoWires Initialized", "active {%d}", active);
 
         int error, address;

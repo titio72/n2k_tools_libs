@@ -9,7 +9,7 @@ class TwoWireProvider
 {
 public:
     static TwoWire* get_two_wire();
-
+    static inline uint32_t clock = 100000; // Default I2C clock 100kHz
 private:
     TwoWireProvider();
 };
